@@ -150,7 +150,9 @@ class Cropper:
         ----------
         - `path_or_array` : {`str`, `np.ndarray`}
             * The filepath or numpy array of the image.
-
+        - `recursive`: `bool`
+            * If True, returns a list of cropped images for each detected face.
+            
         Returns
         -------
         - `image` : {`np.ndarray`, `None`}
@@ -190,29 +192,22 @@ class Cropper:
         if len(faces) == 0:
             return None
 
-        # Make padding from biggest face found
-        x, y, w, h = faces[-1]
-        pos = self._crop_positions(
-            img_height,
-            img_width,
-            x,
-            y,
-            w,
-            h,
-        )
+        cropped_images = []
+        for (x, y, w, h) in faces:
+            pos = self._crop_positions(img_height, img_width, x, y, w, h)
+            cropped_img = image[pos[0] : pos[1], pos[2] : pos[3]]
 
-        # ====== Actual cropping ======
-        image = image[pos[0] : pos[1], pos[2] : pos[3]]
+            if self.resize:
+                with Image.fromarray(cropped_img) as img:
+                    cropped_img = np.array(img.resize((self.width, self.height)))
 
-        # Resize
-        if self.resize:
-            with Image.fromarray(image) as img:
-                image = np.array(img.resize((self.width, self.height)))
+            if self.gamma:
+                cropped_img = check_underexposed(cropped_img, gray)
 
-        # Underexposition fix
-        if self.gamma:
-            image = check_underexposed(image, gray)
-        return bgr_to_rbg(image)
+            cropped_img = bgr_to_rbg(cropped_img)
+            cropped_images.append(cropped_img)
+
+        return cropped_images if recursive else cropped_images[0]
 
     def _determine_safe_zoom(self, imgh, imgw, x, y, w, h):
         """
